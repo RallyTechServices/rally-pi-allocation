@@ -13,6 +13,13 @@ Ext.define('CustomApp', {
         xtype:'container',
         itemId:'pi_title',
         padding: 5
+    },
+    {
+        xtype:'container',
+        itemId:'chart_box',
+        width: 600, 
+        height: 500,
+        padding: 10
     }],
     launch: function() {
         this._addSelectors();
@@ -164,8 +171,59 @@ Ext.define('CustomApp', {
     },
     _makeChart: function(stories){
         var me = this;
+        var chart_data = {};
+        var total_size = 0;
         Ext.Array.each(stories,function(story){
             me.logger.log(this,story.get('Name'));
+            var state = story.get('ScheduleState');
+            me.logger.log(this,state);
+            var size = story.get('PlanEstimate');
+            
+            if ( !chart_data[state] ) {
+                chart_data[state] = 0;
+            }
+            chart_data[state] += size;
+            total_size += size;
+        });
+
+        var series = [];
+        for ( var state in chart_data ) {
+            var ratio = parseInt(100*chart_data[state]/total_size);
+            var name = state + " " + ratio + "%";
+            series.push({name:name,y:chart_data[state]});
+        }
+        
+        me.logger.log(this,["Chart Data",chart_data]);
+        me.logger.log(this,["Chart Series",series]);
+
+        if ( me.chart ) { me.chart.destroy(); }
+        
+        me.chart = this.down('#chart_box').add({
+            xtype:'rallychart',
+
+            chartConfig: {
+                chart: {},
+                height: 350,
+                width: 350,
+                plotOptions: {
+                    pie: {
+                        allowPointSelect: true,
+                        cursor: 'pointer',
+                        dataLabels: {
+                            enabled: true,
+                            color: '#000000',
+                            connectorColor: '#000000',
+                            format: '<b>{point.name}</b>'
+                        }
+                    }
+                },
+                title: 'Actual Distribution',
+                tooltip: { enabled: false}
+            },
+            chartData: {
+
+                series: [{type:'pie',name:'State Distribution',data:series}]
+            }
         });
     }
 });
