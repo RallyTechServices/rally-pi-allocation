@@ -77,8 +77,18 @@
                 },
                 _addSelectors: function() {
                     this._addIterationPicker();
+                    this._addTagPicker();
                     this._addTypePicker();
                     this._addButtons();
+                },
+                _addTagPicker: function() {
+                    this.down('#selector_box').add({
+                        itemId:'tag_selector',
+                        xtype: 'rallytagpicker',
+                        fieldLabel: 'with tag: ',
+                        autoExpand: false,
+                        labelWidth: 50
+                    });
                 },
                 _addTypePicker: function() {
                     this.down('#selector_box').add({
@@ -124,11 +134,16 @@
                     this.logger.log(this,this.down('#type_selector').getRecord());
                     var options = {
                         pi: this.down('#type_selector').getRecord().get('ElementName'),
-                        iteration: this.down('#iteration_selector').getRecord()
+                        iteration: this.down('#iteration_selector').getRecord(),
+                        tags: []
+                        
                     };
                     if ( this._base_records.length > 0 ) {
                         options.pi = this._base_records[0];
                     }
+                    Ext.Array.each(this.down('#tag_selector').getValue(),function(tag){
+                        options.tags.push(tag.get('Name'));
+                    });
                     
                     this.logger.log(this,typeof options.pi);
                     if ( typeof options.pi === 'object' ) {
@@ -140,12 +155,19 @@
                     if ( options.iteration.get('Name')) {
                         message_box.add({xtype:'container',html:'Assigned to iteration ' + options.iteration.get('Name')});
                     }
+                    
+                    if ( options.tags.length > 0 ) {
+                        message_box.add({xtype:'container',html:'With tag applied to lowest level PI: ' + options.tags.join(' or ')});
+                    }
+                    
+                    me.logger.log(this,options.tags);
+                    
                     if (typeof options.pi === 'object'){
                         this._findDescendants(options, this._base_records);
                     } else {
                         Ext.create('Rally.data.WsapiDataStore',{
                             model:this.down('#type_selector').getRecord().get('TypePath'),
-                            fetch: ['Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID'],
+                            fetch: ['Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID','Tags'],
                             autoLoad: true,
                             listeners: {
                                 load: function(store,records) {
@@ -173,7 +195,7 @@
                             {text:'State',dataIndex:'State'}
                         ],
                         storeConfig: {
-                            fetch:['Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID']
+                            fetch:['Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID','Tags']
                         },
                         autoShow: true,
                         height: 400,
@@ -212,7 +234,7 @@
                         var first_record = records[0];
             
                         var pi_level = first_record.get('PortfolioItemType').Ordinal;
-                        type_name = first_record.get('PortfolioItemType').Name;
+                        options.type_name = first_record.get('PortfolioItemType').Name;
                         // 0 is lowest level (e.g., feature)
                         me.logger.log(this,'pi level ' + pi_level);
                         if ( pi_level !== 0 ) {
@@ -225,7 +247,7 @@
                                 if ( children.Count > 0 ) {
                                     callback_counter += 1;
                                     no_children_found = false;
-                                    record.getCollection('Children',{fetch:['Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID']}).load({
+                                    record.getCollection('Children',{fetch:['Tags','Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID']}).load({
                                         callback: function(records,operation,success){
                                             Ext.Array.push(all_children,records);
                                             callback_counter -= 1;
@@ -239,46 +261,95 @@
                             });
                             if (no_children_found) { me._findDescendants(options,[]); }
                         } else {
-                            // get children stories
-                            me.logger.log(this,"going to get stories");
-                            var oid_filters = Ext.create('Rally.data.QueryFilter',{property:type_name+".ObjectID",operator:'=',value:records[0].get('ObjectID')});
-                            Ext.Array.each(records,function(record,idx){
-                                if (idx>0) {
-                                    oid_filters = oid_filters.or(Ext.create('Rally.data.QueryFilter',{
-                                        property:type_name+".ObjectID",
-                                        operator:'=',
-                                        value:record.get('ObjectID')
-                                    }));
+                            // get children stories                
+                            me._limitPIsToSelectedTags(options,records);
+                        }
+                    }
+                },
+                _getStories: function(options,records){
+                    var me = this;
+                    var oid_filters = Ext.create('Rally.data.QueryFilter',{
+                        property:options.type_name+".ObjectID",
+                        operator:'=',
+                        value:records[0].get('ObjectID')
+                    });
+                    Ext.Array.each(records,function(record,idx){
+                        if (idx>0) {
+                            oid_filters = oid_filters.or(Ext.create('Rally.data.QueryFilter',{
+                                property:options.type_name+".ObjectID",
+                                operator:'=',
+                                value:record.get('ObjectID')
+                            }));
+                        }
+                    });
+                    var filters = Ext.create('Rally.data.QueryFilter',{property:"PlanEstimate",operator:'>',value:0});
+                    filters = filters.and(Ext.create('Rally.data.QueryFilter',{property:"DirectChildrenCount",operator:'=',value:0}));
+                    if ( options.iteration && options.iteration.get('Name') !== "") {
+                        filters = filters.and(Ext.create('Rally.data.QueryFilter',{
+                            property:'Iteration.Name',
+                            value: options.iteration.get('Name')
+                        }));
+                    }
+                    
+                    filters = filters.and(oid_filters);
+                    
+                    me.logger.log(this,["filters",filters.toString()]);
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        model:'UserStory',
+                        filters: filters,
+                        fetch: ['Name','PlanEstimate','ScheduleState'],
+                        autoLoad: true,
+                        listeners: {
+                            load: function(store,records) {
+                                me.logger.log(this,records);
+                                if ( records.length === 0 ) {
+                                    me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No stories for given selection options'});
+                                } else { 
+                                    me._makeChart(records);
                                 }
-                            });
-                            var filters = Ext.create('Rally.data.QueryFilter',{property:"PlanEstimate",operator:'>',value:0});
-                            filters = filters.and(Ext.create('Rally.data.QueryFilter',{property:"DirectChildrenCount",operator:'=',value:0}));
-                            if ( options.iteration ) {
-                                filters = filters.and(Ext.create('Rally.data.QueryFilter',{
-                                    property:'Iteration.Name',
-                                    value: options.iteration.get('Name')
-                                }));
                             }
-                            
-                            filters = filters.and(oid_filters);
-                            
-                            me.logger.log(this,["filters",filters.toString()]);
-                            Ext.create('Rally.data.WsapiDataStore',{
-                                model:'UserStory',
-                                filters: filters,
-                                fetch: ['Name','PlanEstimate','ScheduleState'],
-                                autoLoad: true,
-                                listeners: {
-                                    load: function(store,records) {
-                                        me.logger.log(this,records);
-                                        if ( records.length === 0 ) {
-                                            me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No stories for given selection options'});
-                                        } else { 
-                                            me._makeChart(records);
+                        }
+                    });
+                },
+                _limitPIsToSelectedTags: function(options,records){
+                    var me = this;
+                    me.logger.log(this,['_limitPIsToSelectedTags',options]);
+                    var filtered_records = [];
+                    if ( options.tags.length === 0 ) {
+                        me._getStories(options,records);
+                    } else { 
+                        var callback_counter = 0;
+                        var any_tags_found = false;
+                        Ext.Array.each(records, function(record){
+                            var tags = record.get('Tags');
+                            me.logger.log(this,[tags,record]);
+                            if ( tags.Count > 0 ) {
+                                any_tags_found = true;
+                                callback_counter += 1;
+                                record.getCollection('Tags',{fetch:['Name']}).load({
+                                    callback: function(tag_records,operation,success){
+                                        me.logger.log(this,tag_records);
+                                        callback_counter -= 1;
+                                        me.logger.log(this,'counter ' + callback_counter);
+                                        Ext.Array.each(tag_records,function(tag_record) {
+                                            if (Ext.Array.indexOf(options.tags,tag_record.get('Name')) > -1) {
+                                                filtered_records.push(record);
+                                                return;
+                                            }
+                                        });
+                                        if (callback_counter<=0) {
+                                            if ( filtered_records.length === 0 ) {
+                                                me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No PIs for given selection options, particularly tags'});
+                                            } else { 
+                                                 me._getStories(options,filtered_records);
+                                            }
                                         }
                                     }
-                                }
-                            });
+                                });
+                            }
+                        });
+                        if ( !any_tags_found ) {
+                            me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No PIs for given selection options'});
                         }
                     }
                 },
