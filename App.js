@@ -14,12 +14,26 @@ Ext.define('CustomApp', {
         itemId:'pi_title',
         padding: 5
     },
-    {
+    { 
         xtype:'container',
-        itemId:'chart_box',
-        width: 600, 
-        height: 500,
-        padding: 10
+        layout: {type:'hbox'},
+        margin: 5,
+        items:[
+            {
+                xtype:'container',
+                itemId:'actual_chart_box',
+                width: 600, 
+                height: 500,
+                padding: 10
+            },
+            {
+                xtype:'container',
+                itemId:'target_chart_box',
+                width: 600, 
+                height: 500,
+                padding: 10
+            }
+        ]
     }],
     launch: function() {
         this._addSelectors();
@@ -196,9 +210,9 @@ Ext.define('CustomApp', {
         me.logger.log(this,["Chart Data",chart_data]);
         me.logger.log(this,["Chart Series",series]);
 
-        if ( me.chart ) { me.chart.destroy(); }
+        if ( me.actual_chart ) { me.actual_chart.destroy(); }
         
-        me.chart = this.down('#chart_box').add({
+        me.actual_chart = this.down('#actual_chart_box').add({
             xtype:'rallychart',
 
             chartConfig: {
@@ -217,11 +231,13 @@ Ext.define('CustomApp', {
                         }
                     }
                 },
-                title: 'Actual Distribution',
-                tooltip: { enabled: false}
+                tooltip: { enabled: false},
+                title: {
+                    text: 'Actual Distribution',
+                    align: 'center'
+                }
             },
             chartData: {
-
                 series: [{type:'pie',name:'State Distribution',data:series}]
             }
         });
