@@ -53,11 +53,14 @@ Ext.define('CustomApp', {
         });
     },
     _addIterationPicker: function() {
+        var first_time = true;
+        var me = this;
         this.down('#selector_box').add({
             xtype: 'rallyiterationcombobox',
             itemId: 'iteration_selector',
             fieldLabel: 'Items from Iteration:',
-            width:300
+            width:300,
+            allowNoEntry:true
         });
     },
     _addButtons: function() {
@@ -98,8 +101,9 @@ Ext.define('CustomApp', {
             message_box.add({xtype:'container',html:'Descendants of Portfolio Items of type ' + options.pi});
         }
         
-        message_box.add({xtype:'container',html:'Assigned to iteration ' + options.iteration.get('Name')});
-        
+        if ( options.iteration.get('Name')) {
+            message_box.add({xtype:'container',html:'Assigned to iteration ' + options.iteration.get('Name')});
+        }
         if (typeof options.pi === 'object'){
             this._findDescendants(options, this._base_records);
         } else {
@@ -222,7 +226,6 @@ Ext.define('CustomApp', {
                 
                 filters = filters.and(oid_filters);
                 
-
                 me.logger.log(this,["filters",filters.toString()]);
                 Ext.create('Rally.data.WsapiDataStore',{
                     model:'UserStory',
