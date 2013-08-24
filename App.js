@@ -2,7 +2,9 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     logger: new Rally.technicalservices.logger(),
-    _base_records: [],
+    _selected_base_records: [],
+    _selected_iteration: null,
+    _selected_tags: [],
     items: [{
         xtype:'container',
         itemId:'selector_box',
@@ -12,8 +14,23 @@ Ext.define('CustomApp', {
     },
     {
         xtype:'container',
-        itemId:'pi_title',
-        padding: 5
+        itemId:'configuration_reporter_box',
+        defaults: { margin: 5 },
+        padding: 5,
+        items: [
+            {
+                xtype:'container',
+                itemId:'selected_pi_box'
+            },
+            {
+                xtype:'container',
+                itemId:'selected_iteration_box'
+            },
+            {
+                xtype:'container',
+                itemId:'selected_tag_box'
+            }
+        ]
     },
     { 
         xtype:'container',
@@ -40,26 +57,42 @@ Ext.define('CustomApp', {
         this._addSelectors();
     },
     _addSelectors: function() {
+        this._addTypePicker();
+        this._addPIButton();
+        
         this._addIterationPicker();
         this._addTagPicker();
-        this._addTypePicker();
-        this._addButtons();
+
+        this._addChartButton();
     },
     _addTagPicker: function() {
+        var me = this;
         this.down('#selector_box').add({
             itemId:'tag_selector',
             xtype: 'rallytagpicker',
             fieldLabel: 'with tag: ',
             autoExpand: false,
-            labelWidth: 50
+            labelWidth: 50,
+            listeners: {
+                selectionchange: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
         });
     },
     _addTypePicker: function() {
+        var me = this;
         this.down('#selector_box').add({
             itemId: 'type_selector',
             xtype: 'rallyportfolioitemtypecombobox',
-            fieldLabel: 'Portfolio Items of Type:',
-            labelWidth: 150
+            fieldLabel: 'Portfolio Item Type:',
+            labelWidth: 135,
+            listeners: {
+                change: function() {
+                    me._selected_base_records = [];
+                    me._populateConfigurationReporter();
+                }
+            }
         });
     },
     _addIterationPicker: function() {
@@ -68,12 +101,17 @@ Ext.define('CustomApp', {
         this.down('#selector_box').add({
             xtype: 'rallyiterationcombobox',
             itemId: 'iteration_selector',
-            fieldLabel: 'Items from Iteration:',
+            fieldLabel: 'Limit to items from iteration:',
             width:300,
-            allowNoEntry:true
+            allowNoEntry:true,
+            listeners: {
+                change: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
         });
     },
-    _addButtons: function() {
+    _addPIButton: function() {
         var me = this;
         this.down('#selector_box').add({
             xtype:'rallybutton',
@@ -81,53 +119,35 @@ Ext.define('CustomApp', {
             handler: me._launchPIPicker,
             scope: me
         });
+    },
+    _addChartButton: function(){
+        var me = this;
         this.down('#selector_box').add({
+            itemId:'draw_chart_button',
             xtype:'rallybutton',
             text:'Draw Chart',
-            handler: me._processChoices,
+            disabled: true,
+            handler: me._getData,
             scope: me
         });
     },
-    _processChoices: function() {
+    _getData: function() {
         var me = this;
-        var message_box = this.down('#pi_title');
         if ( this.actual_chart ) { this.actual_chart.destroy(); }
         
-        message_box.removeAll();
-        message_box.add({xtype:'container',html:'Selection options:'});
         this.logger.log(this,this.down('#type_selector').getRecord());
         var options = {
             pi: this.down('#type_selector').getRecord().get('ElementName'),
-            iteration: this.down('#iteration_selector').getRecord(),
-            tags: []
+            iteration: this._selected_iteration,
+            tags: this._selected_tags
             
         };
-        if ( this._base_records.length > 0 ) {
-            options.pi = this._base_records[0];
+        if ( this._selected_base_records.length > 0 ) {
+            options.pi = this._selected_base_records[0];
         }
-        Ext.Array.each(this.down('#tag_selector').getValue(),function(tag){
-            options.tags.push(tag.get('Name'));
-        });
-        
-        this.logger.log(this,typeof options.pi);
-        if ( typeof options.pi === 'object' ) {
-            message_box.add({xtype:'container',html:'Descendants of ' + options.pi.get('Name')});
-        } else {
-            message_box.add({xtype:'container',html:'Descendants of Portfolio Items of type ' + options.pi});
-        }
-        
-        if ( options.iteration.get('Name')) {
-            message_box.add({xtype:'container',html:'Assigned to iteration ' + options.iteration.get('Name')});
-        }
-        
-        if ( options.tags.length > 0 ) {
-            message_box.add({xtype:'container',html:'With tag applied to lowest level PI: ' + options.tags.join(' or ')});
-        }
-        
-        me.logger.log(this,options.tags);
         
         if (typeof options.pi === 'object'){
-            this._findDescendants(options, this._base_records);
+            this._findDescendants(options, this._selected_base_records);
         } else {
             Ext.create('Rally.data.WsapiDataStore',{
                 model:this.down('#type_selector').getRecord().get('TypePath'),
@@ -141,11 +161,43 @@ Ext.define('CustomApp', {
             });
         }
     },
+    _populateConfigurationReporter: function() {
+        var me = this;
+        if ( this.actual_chart ) { this.actual_chart.destroy(); }
+        
+        me._selected_iteration = me.down('#iteration_selector').getRecord();
+        var iteration_message = "&nbsp;&nbsp;&nbsp;Items regardless of iteration";
+        if ( me._selected_iteration && me._selected_iteration.get('Name') !== "" ) {
+            iteration_message = "&nbsp;&nbsp;&nbsp;Items associated with iterations named " + me._selected_iteration.get('Name');
+        }
+        
+        me._selected_tags = [];
+        Ext.Array.each(this.down('#tag_selector').getValue(),function(tag){
+            me._selected_tags.push(tag.get('Name'));
+        });
+        var tag_message = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and regardless of tag";
+        if ( me._selected_tags.length === 1 ) {
+            tag_message = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and with tag named " + me._selected_tags[0];
+        } else if ( me._selected_tags.length > 1 ) {
+            tag_message = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and with one of these tags: " + me._selected_tags.join(',');
+        }
+        
+        if ( me._selected_base_records.length > 0 ) {
+            me.down('#selected_pi_box').update("For " + 
+                me.down('#type_selector').getRecord().get('ElementName') + " " +
+                me._selected_base_records[0].get('FormattedID') + " " +
+                me._selected_base_records[0].get('Name') + ", find:");
+                
+            me.down('#selected_iteration_box').update(iteration_message);
+            me.down('#selected_tag_box').update(tag_message);
+        } else {
+            me.down('#selected_pi_box').update("No PI chosen.");
+        }
+        
+    },
     _launchPIPicker: function() {
         var me = this;
         this.logger.log(this, "launch PI Picker");
-        
-        this._base_records = [];
         
         this.dialog = Ext.create('Rally.ui.dialog.ChooserDialog', {
             artifactTypes: [me.down('#type_selector').getRecord().get('TypePath')],
@@ -171,7 +223,13 @@ Ext.define('CustomApp', {
                 userAction:'clicked done in dialog',
                 handler:function(){
                     var records = me.dialog._getSelectedRecords();
-                    me._base_records = records;
+                    me._selected_base_records = records;
+                    if ( me._selected_base_records.length > 0 ) {
+                        me.down('#draw_chart_button').setDisabled(false);
+                    } else {
+                        me.down('#draw_chart_button').setDisabled(true);
+                    }
+                    me._populateConfigurationReporter();
                     me.dialog.close();
                 },
                 scope: me
@@ -181,6 +239,12 @@ Ext.define('CustomApp', {
                 text:'Cancel',
                 userAction:'clicked done in dialog',
                 handler:function(){
+                    if ( me._selected_base_records.length > 0 ) {
+                        me.down('#draw_chart_button').setDisabled(false);
+                    } else {
+                        me.down('#draw_chart_button').setDisabled(true);
+                    }
+                    me._populateConfigurationReporter();
                     me.dialog.close();
                 },
                 scope: me
@@ -193,7 +257,7 @@ Ext.define('CustomApp', {
         var type_name = null;
         
         if ( records.length === 0 ) {
-            me.down('#pi_title').add({xtype:'container',html:'No path to stories for'});
+            this.actual_chart = me.down('#actual_chart_box').add({xtype:'container',html:'No path to stories for the selected PI'});
         } else {
             var first_record = records[0];
 
@@ -267,7 +331,7 @@ Ext.define('CustomApp', {
                 load: function(store,records) {
                     me.logger.log(this,records);
                     if ( records.length === 0 ) {
-                        me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No stories for given selection options'});
+                        me.actual_chart = me.down('#actual_chart_box').add({xtype:'container',html:'No stories for given selection options'});
                     } else { 
                         me._makeChart(records);
                     }
@@ -303,7 +367,7 @@ Ext.define('CustomApp', {
                             });
                             if (callback_counter<=0) {
                                 if ( filtered_records.length === 0 ) {
-                                    me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No PIs for given selection options, particularly tags'});
+                                    me.actual_chart = me.down('#actual_chart_box').add({xtype:'container',html:'No PIs for given selection options'});
                                 } else { 
                                      me._getStories(options,filtered_records);
                                 }
@@ -313,7 +377,7 @@ Ext.define('CustomApp', {
                 }
             });
             if ( !any_tags_found ) {
-                me.down('#pi_title').add({xtype:'container',html:'<br/><br/>No PIs for given selection options'});
+                me.actual_chart = me.down('#actual_chart_box').add({xtype:'container',html:'No PIs for given selection options'});
             }
         }
     },
