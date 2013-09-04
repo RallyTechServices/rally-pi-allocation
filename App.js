@@ -380,7 +380,7 @@ Ext.define('CustomApp', {
         Ext.create('Rally.data.WsapiDataStore',{
             model:'UserStory',
             filters: filters,
-            fetch: ['Name','PlanEstimate','ScheduleState'],
+            fetch: ['Name','PlanEstimate','ScheduleState','TaskEstimateTotal'],
             autoLoad: true,
             listeners: {
                 load: function(store,records) {
@@ -470,7 +470,10 @@ Ext.define('CustomApp', {
                 var size = leaf.get('PlanEstimate') || 0;
                 if ( metric === "count" ) {
                     size = 1;
+                } else if ( metric === "hours" ) {
+                    size = leaf.get('TaskEstimateTotal') || 0;
                 }
+                
                 chart_data[data_key] += size;
                 total_size += size;
             });
