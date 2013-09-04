@@ -509,6 +509,7 @@ Ext.define('CustomApp', {
                             cursor: 'pointer',
                             dataLabels: {
                                 enabled: true,
+                                distance: 5,
                                 color: '#000000',
                                 connectorColor: '#000000',
                                 format: '<b>{point.name}</b>'
