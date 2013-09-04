@@ -42,15 +42,13 @@ Ext.define('CustomApp', {
                 xtype:'container',
                 itemId:'actual_chart_box',
                 width: 600, 
-                height: 500,
-                padding: 10
+                height: 500
             },
             {
                 xtype:'container',
                 itemId:'target_chart_box',
                 width: 600, 
-                height: 500,
-                padding: 10
+                height: 500
             }
         ]
     }],
@@ -139,7 +137,7 @@ Ext.define('CustomApp', {
         var me = this;
         if ( this.actual_chart ) { this.actual_chart.destroy(); }
         
-        this.logger.log(this,this.down('#type_selector').getRecord());
+        this.logger.log(this,"_getData",this.down('#type_selector').getRecord());
         var options = {
             pi: this._selected_base_records[0],
             iteration: this._selected_iteration,
@@ -261,11 +259,11 @@ Ext.define('CustomApp', {
     },
     _findDescendants: function(key,options,records){
         var me = this;
-        me.logger.log(this,['_findDescendants for ',key,options,records]);
+        me.logger.log(this,'_findDescendants for ',key,options,records);
         var type_name = null;
         
         if ( records.length === 0 ) {
-            me.logger.log(this,["No path to stories",options]);
+            me.logger.log(this,"No path to stories",options);
             me._direct_children[key].set('_leaves',[]);
         } else {
             var first_record = records[0];
@@ -303,17 +301,22 @@ Ext.define('CustomApp', {
         }
     },
     _getStories: function(key,options,records){
+        
+        var field_name = "PortfolioItemRelease";
+        if ( options.type_name !== "Release" ) {
+            field_name = options.type_name;
+        }
         var me = this;
         me.logger.log(this,"Getting stories related to " + key);
         var oid_filters = Ext.create('Rally.data.QueryFilter',{
-            property:options.type_name+".ObjectID",
+            property:field_name+".ObjectID",
             operator:'=',
             value:records[0].get('ObjectID')
         });
         Ext.Array.each(records,function(record,idx){
             if (idx>0) {
                 oid_filters = oid_filters.or(Ext.create('Rally.data.QueryFilter',{
-                    property:options.type_name+".ObjectID",
+                    property:field_name+".ObjectID",
                     operator:'=',
                     value:record.get('ObjectID')
                 }));
@@ -332,7 +335,7 @@ Ext.define('CustomApp', {
         
         filters = filters.and(oid_filters);
         
-        me.logger.log(this,["filters",filters.toString()]);
+        me.logger.log(this,"filters",filters.toString());
         Ext.create('Rally.data.WsapiDataStore',{
             model:'UserStory',
             filters: filters,
@@ -340,7 +343,7 @@ Ext.define('CustomApp', {
             autoLoad: true,
             listeners: {
                 load: function(store,records) {
-                    me.logger.log(this,["For " + key,records]);
+                    me.logger.log(this,"For " + key,records);
                     me._direct_children[key].set("_leaves",records);
                     var waiter = null;
                     for ( var i in me._direct_children ) {
@@ -360,7 +363,7 @@ Ext.define('CustomApp', {
     },
     _limitPIsToSelectedTags: function(key,options,records){
         var me = this;
-        me.logger.log(this,['_limitPIsToSelectedTags',key,options,records]);
+        me.logger.log(this,'_limitPIsToSelectedTags',key,options,records);
         var filtered_records = [];
         if ( options.tags.length === 0 ) {
             me._getStories(key,options,records);
@@ -369,13 +372,13 @@ Ext.define('CustomApp', {
             var any_tags_found = false;
             Ext.Array.each(records, function(record){
                 var tags = record.get('Tags');
-                me.logger.log(this,[tags,record]);
+                me.logger.log(this,tags,record);
                 if ( tags.Count > 0 ) {
                     any_tags_found = true;
                     callback_counter += 1;
                     record.getCollection('Tags',{fetch:['Name']}).load({
                         callback: function(tag_records,operation,success){
-                            me.logger.log(this,["has tags",tag_records]);
+                            me.logger.log(this,"has tags",tag_records);
                             callback_counter -= 1;
                             me.logger.log(this,'counter ' + callback_counter);
                             Ext.Array.each(tag_records,function(tag_record) {
@@ -386,8 +389,9 @@ Ext.define('CustomApp', {
                             });
                             if (callback_counter<=0) {
                                 if ( filtered_records.length === 0 ) {
-                                    me.logger.log(this,"Has tags, but not the right ones, so setting stories to empty");
-                                    me._direct_children[key].set("_leaves",[]);
+                                    me.logger.log(this,"Has tags, but not the right ones, REMOVING",key);
+                                    delete me._direct_children[key];
+                                    //me._direct_children[key].set("_leaves",[]);
                                 } else { 
                                      me._getStories(key,options,filtered_records);
                                 }
@@ -397,8 +401,9 @@ Ext.define('CustomApp', {
                 }
             });
             if ( !any_tags_found ) {
-                me.logger.log(this,"Has no tags, so setting stories to empty");
-                me._direct_children[key].set("_leaves",[]);
+                me.logger.log(this,"Has no tags, so REMOVING",key);
+                delete me._direct_children[key];
+                //me._direct_children[key].set("_leaves",[]);
             }
         }
     },
@@ -410,7 +415,7 @@ Ext.define('CustomApp', {
         
         for ( var key in me._direct_children ) {
             var child = me._direct_children[key];
-            me.logger.log(this,[key,child]);
+            me.logger.log(this,key,child);
             
             var data_key = child.get('FormattedID') + ":" + child.get('Name');
             chart_data[data_key] = 0;
@@ -428,12 +433,12 @@ Ext.define('CustomApp', {
         var series = [];
         for ( var key in chart_data ) {
             var ratio = parseInt(100*chart_data[key]/total_size);
-            var name = Ext.util.Format.ellipsis(key,40,true) + " " + ratio + "%";
-            series.push({name:name,y:chart_data[key]});
+            var name = Ext.util.Format.ellipsis(key,28,true) + "<br/>" + ratio + "%";
+            series.push({full_name:key,name:name,y:chart_data[key]});
         }
         
-        me.logger.log(this,["Chart Data",chart_data]);
-        me.logger.log(this,["Chart Series",series]);
+        me.logger.log(this,"Chart Data",chart_data);
+        me.logger.log(this,"Chart Series",series);
 
         if ( me.actual_chart ) { me.actual_chart.destroy(); }
         
@@ -446,10 +451,13 @@ Ext.define('CustomApp', {
             me.actual_chart = this.down('#actual_chart_box').add({
                 xtype:'rallychart',
                 chartConfig: {
-                    chart: {},
-                    height: 350,
-                    width: 350,
+                    chart: {
+                        spacingRight: 25,
+                        spacingLeft: 5
+                        /*width: 700*/
+                    },
                     plotOptions: {
+                        
                         pie: {
                             allowPointSelect: true,
                             cursor: 'pointer',
@@ -461,7 +469,9 @@ Ext.define('CustomApp', {
                             }
                         }
                     },
-                    tooltip: { enabled: false},
+                    tooltip: { 
+                        enabled: false
+                    },
                     title: {
                         text: 'Actual Distribution',
                         align: 'center'
