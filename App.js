@@ -6,12 +6,22 @@ Ext.define('CustomApp', {
     _direct_children: [],
     _selected_iteration: null,
     _selected_tags: [],
-    items: [{
+    items: [
+    {
         xtype:'container',
         itemId:'selector_box',
         padding:5,
         layout:{type:'hbox'},
-        defaults: { margin: 5 }
+        defaults: { margin: 5 },
+        items: [
+            {xtype:'container',itemId:'pi_selector_box'},
+            {xtype:'container',itemId:'chart_selector_box'},
+            {xtype:'container',items:[
+                {xtype:'container',itemId:'iteration_selector_box'},
+                {xtype:'container',itemId:'tag_selector_box'},
+                {xtype:'container',itemId:'metric_selector_box'}
+            ]}
+        ]
     },
     {
         xtype:'container',
@@ -22,6 +32,10 @@ Ext.define('CustomApp', {
             {
                 xtype:'container',
                 itemId:'selected_pi_box'
+            },
+            {
+                xtype:'container',
+                itemId:'selected_metric_box'
             },
             {
                 xtype:'container',
@@ -62,14 +76,15 @@ Ext.define('CustomApp', {
         this._addIterationPicker();
         this._addTagPicker();
 
+        this._addMetricPicker();
         this._addChartButton();
     },
     _addTagPicker: function() {
         var me = this;
-        this.down('#selector_box').add({
+        this.down('#tag_selector_box').add({
             itemId:'tag_selector',
             xtype: 'rallytagpicker',
-            fieldLabel: 'with tag: ',
+            fieldLabel: 'with tag',
             autoExpand: false,
             labelWidth: 50,
             listeners: {
@@ -81,14 +96,14 @@ Ext.define('CustomApp', {
     },
     _addTypePicker: function() {
         var me = this;
-        this.down('#selector_box').add({
+        this.down('#pi_selector_box').add({
             itemId: 'type_selector',
             xtype: 'rallyportfolioitemtypecombobox',
-            fieldLabel: 'Portfolio Item Type:',
+            fieldLabel: 'PI Type:',
             storeConfig: {
                 filters: [{"property":"Ordinal","operator":">","value":0}]
             },
-            labelWidth: 135,
+            labelWidth: 50,
             listeners: {
                 change: function() {
                     me._selected_base_records = [];
@@ -97,14 +112,39 @@ Ext.define('CustomApp', {
             }
         });
     },
+    _addMetricPicker: function() {
+        var me = this;
+        var metrics = Ext.create('Ext.data.Store', {
+            fields: ['name', 'value'],
+            data : [
+                {"name":"By Points", "value":"points"},
+                {"name":"By Count", "value":"count"},
+                {"name":"By Hours", "value":"hours"}
+            ]
+        });
+        this.down('#chart_selector_box').add({
+            itemId: 'metric_selector',
+            xtype: 'combobox',
+            fieldLabel: 'Chart metric:',
+            store: metrics,
+            displayField: 'name',
+            valueField:'value',
+            labelWidth: 50,
+            listeners: {
+                change: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
+        }).setValue('points');
+    },
     _addIterationPicker: function() {
         var first_time = true;
         var me = this;
-        this.down('#selector_box').add({
+        this.down('#iteration_selector_box').add({
             xtype: 'rallyiterationcombobox',
             itemId: 'iteration_selector',
-            fieldLabel: 'Limit to items from iteration:',
-            width:300,
+            fieldLabel: 'From iteration:',
+            labelWidth:50,
             allowNoEntry:true,
             listeners: {
                 change: function() {
@@ -115,7 +155,7 @@ Ext.define('CustomApp', {
     },
     _addPIButton: function() {
         var me = this;
-        this.down('#selector_box').add({
+        this.down('#pi_selector_box').add({
             xtype:'rallybutton',
             text:'Choose a Portfolio Item',
             handler: me._launchPIPicker,
@@ -124,7 +164,7 @@ Ext.define('CustomApp', {
     },
     _addChartButton: function(){
         var me = this;
-        this.down('#selector_box').add({
+        this.down('#chart_selector_box').add({
             itemId:'draw_chart_button',
             xtype:'rallybutton',
             text:'Draw Chart',
@@ -171,6 +211,8 @@ Ext.define('CustomApp', {
         var me = this;
         if ( this.actual_chart ) { this.actual_chart.destroy(); }
         
+        var metric_message = "Display by " + me.down('#metric_selector').getValue();
+        
         me._selected_iteration = me.down('#iteration_selector').getRecord();
         var iteration_message = "&nbsp;&nbsp;&nbsp;Items regardless of iteration";
         if ( me._selected_iteration && me._selected_iteration.get('Name') !== "" ) {
@@ -193,7 +235,7 @@ Ext.define('CustomApp', {
                 me.down('#type_selector').getRecord().get('ElementName') + " " +
                 me._selected_base_records[0].get('FormattedID') + " " +
                 me._selected_base_records[0].get('Name') + ", find:");
-                
+            me.down('#selected_metric_box').update(metric_message);
             me.down('#selected_iteration_box').update(iteration_message);
             me.down('#selected_tag_box').update(tag_message);
         } else {
@@ -322,8 +364,7 @@ Ext.define('CustomApp', {
                 }));
             }
         });
-        var filters = Ext.create('Rally.data.QueryFilter',{property:"PlanEstimate",operator:'>',value:0});
-        filters = filters.and(Ext.create('Rally.data.QueryFilter',{property:"DirectChildrenCount",operator:'=',value:0}));
+        var filters = Ext.create('Rally.data.QueryFilter',{property:"DirectChildrenCount",operator:'=',value:0});
         filters = filters.and(Ext.create('Rally.data.QueryFilter',{property:'ScheduleState',operator:'>',value:'Defined'}));
         
         if ( options.iteration && options.iteration.get('Name') !== "") {
@@ -343,7 +384,7 @@ Ext.define('CustomApp', {
             autoLoad: true,
             listeners: {
                 load: function(store,records) {
-                    me.logger.log(this,"For " + key,records);
+                    me.logger.log(this,"Stories for " + key,records);
                     me._direct_children[key].set("_leaves",records);
                     var waiter = null;
                     for ( var i in me._direct_children ) {
@@ -413,6 +454,8 @@ Ext.define('CustomApp', {
         var chart_data = {};
         var total_size = 0;
         
+        var metric = this.down('#metric_selector').getValue();
+        
         for ( var key in me._direct_children ) {
             var child = me._direct_children[key];
             me.logger.log(this,key,child);
@@ -425,6 +468,9 @@ Ext.define('CustomApp', {
             
             Ext.Array.each(leaves,function(leaf){
                 var size = leaf.get('PlanEstimate') || 0;
+                if ( metric === "count" ) {
+                    size = 1;
+                }
                 chart_data[data_key] += size;
                 total_size += size;
             });
