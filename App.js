@@ -73,7 +73,7 @@ Ext.define('CustomApp', {
         this._addTypePicker();
         this._addPIButton();
         
-        this._addIterationPicker();
+        this._addIterationDatePickers();
         this._addTagPicker();
 
         this._addMetricPicker();
@@ -84,9 +84,8 @@ Ext.define('CustomApp', {
         this.down('#tag_selector_box').add({
             itemId:'tag_selector',
             xtype: 'rallytagpicker',
-            fieldLabel: 'with tag',
+            fieldLabel: 'with tag(s)',
             autoExpand: false,
-            labelWidth: 50,
             listeners: {
                 selectionchange: function() {
                     me._populateConfigurationReporter();
@@ -137,8 +136,30 @@ Ext.define('CustomApp', {
             }
         }).setValue('points');
     },
+    _addIterationDatePickers: function() {
+        var me = this;
+        this.down('#iteration_selector_box').add({
+            itemId:'iteration_start_selector',
+            xtype:'rallydatefield',
+            fieldLabel:'Iterations starting after',
+            listeners: {
+                change: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
+        });
+        this.down('#iteration_selector_box').add({
+            itemId:'iteration_end_selector',
+            xtype:'rallydatefield',
+            fieldLabel:'Iterations ending before',
+            listeners: {
+                change: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
+        });
+    },
     _addIterationPicker: function() {
-        var first_time = true;
         var me = this;
         this.down('#iteration_selector_box').add({
             xtype: 'rallyiterationcombobox',
@@ -181,6 +202,8 @@ Ext.define('CustomApp', {
         var options = {
             pi: this._selected_base_records[0],
             iteration: this._selected_iteration,
+            iteration_start: Rally.util.DateTime.format(me.down('#iteration_start_selector').getValue(), 'Y-MM-dd'),
+            iteration_end: Rally.util.DateTime.format(me.down('#iteration_end_selector').getValue(), 'Y-MM-dd'),
             tags: this._selected_tags
         };
 
@@ -213,11 +236,24 @@ Ext.define('CustomApp', {
         
         var metric_message = "Display by " + me.down('#metric_selector').getValue();
         
-        me._selected_iteration = me.down('#iteration_selector').getRecord();
+        //me._selected_iteration = me.down('#iteration_selector').getRecord();
+        
         var iteration_message = "&nbsp;&nbsp;&nbsp;Items regardless of iteration";
         if ( me._selected_iteration && me._selected_iteration.get('Name') !== "" ) {
             iteration_message = "&nbsp;&nbsp;&nbsp;Items associated with iterations named " + me._selected_iteration.get('Name');
         }
+        
+        var iteration_start_date = Rally.util.DateTime.format(me.down('#iteration_start_selector').getValue(), 'D, M d, Y');
+        var iteration_end_date = Rally.util.DateTime.format(me.down('#iteration_end_selector').getValue(), 'D, M d, Y');
+        if ( iteration_start_date  && iteration_end_date ) {
+            iteration_message =  "&nbsp;&nbsp;&nbsp;Items associated with iterations starting after " +
+                    iteration_start_date + " and ending before " + iteration_end_date;
+        } else if ( iteration_start_date ) {
+            iteration_message =  "&nbsp;&nbsp;&nbsp;Items associated with iterations starting after " + iteration_start_date;
+        } else if ( iteration_end_date ) {
+            iteration_message =  "&nbsp;&nbsp;&nbsp;Items associated with iterations ending before " + iteration_end_date;
+        }
+        
         
         me._selected_tags = [];
         Ext.Array.each(this.down('#tag_selector').getValue(),function(tag){
@@ -371,6 +407,22 @@ Ext.define('CustomApp', {
             filters = filters.and(Ext.create('Rally.data.QueryFilter',{
                 property:'Iteration.Name',
                 value: options.iteration.get('Name')
+            }));
+        }
+        
+        if ( options.iteration_start ) {
+            filters = filters.and(Ext.create('Rally.data.QueryFilter',{
+                property: 'Iteration.StartDate',
+                operator: ">=",
+                value: options.iteration_start
+            }));
+        }
+        
+        if ( options.iteration_end ) {
+            filters = filters.and(Ext.create('Rally.data.QueryFilter',{
+                property: 'Iteration.EndDate',
+                operator: "<=",
+                value: options.iteration_end
             }));
         }
         
