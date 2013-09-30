@@ -256,6 +256,7 @@
                         tags: this._selected_tags
                     };
             
+                    me.logger.log(this,"options",options);
                     me._direct_children = {};
                     
                     if ( options.pi.get('PortfolioItemType').Ordinal === 0 ) {
@@ -497,7 +498,7 @@
                                 if ( waiter !== null ) {
                                     me.logger.log(this,"Still waiting for " + waiter);
                                 } else { 
-                                    me._makeChart();
+                                    me._makeBarChart();
                                 }
                             }
                         }
@@ -549,43 +550,96 @@
                         }
                     }
                 },
-                _makeChart: function(){
+                // given an array of direct children, return a hash where the 
+                // key is the direct child name
+                // and value is the size (depending on metric chosen) for that item
+                _calculateDataForChart: function(direct_children) {
                     var me = this;
-                    me.logger.log(this,"_makeChart");
+                    me.logger.log(this,"_calculateDataForChart");
                     var chart_data = {};
-                    var total_size = 0;
-                    
                     var metric = this.down('#metric_selector').getValue();
-                    
-                    for ( var key in me._direct_children ) {
-                        var child = me._direct_children[key];
-                        me.logger.log(this,key,child);
-                        
-                        var data_key = child.get('FormattedID') + ":" + child.get('Name');
+                    Ext.Object.each(direct_children,function(key,child){
+                        var data_key = child.get('Name');
                         chart_data[data_key] = 0;
-                        
                         var leaves = child.get('_leaves');
-                        me.logger.log(this,leaves);
-                        
                         Ext.Array.each(leaves,function(leaf){
-                            var size = leaf.get('PlanEstimate') || 0;
-                            if ( metric === "count" ) {
+                            var size = leaf.get('PlanEstimate')||0;
+                            if ( metric === 'count' ) {
                                 size = 1;
-                            } else if ( metric === "hours" ) {
+                            } else if ( metric === 'hours' ) {
                                 size = leaf.get('TaskEstimateTotal') || 0;
                             }
-                            
                             chart_data[data_key] += size;
-                            total_size += size;
+                            
                         });
-                    };
-            
-                    var series = [];
-                    for ( var key in chart_data ) {
-                        var ratio = parseInt(100*chart_data[key]/total_size);
-                        var name = Ext.util.Format.ellipsis(key,28,true) + "<br/>" + ratio + "%";
-                        series.push({full_name:key,name:name,y:chart_data[key]});
+                    });
+                    return chart_data;
+                },
+                _makeBarChart: function() {
+                    var me = this;
+                    me.logger.log(this,"_makeBarChart");
+                    var chart_data = {};
+                    
+                    var chart_data = me._calculateDataForChart(me._direct_children);
+                    if ( me.actual_chart ) { me.actual_chart.destroy(); }
+                    
+                    if ( Ext.Object.getKeys(chart_data).length === 0 ) {
+                        me.actual_chart = this.down('#actual_chart_box').add({
+                            xtype:'container',
+                            html:'No points found'
+                        });
+                    } else {
+                        var series = [];
+                        var categories = [];
+                        Ext.Array.each(this._selected_base_records, function(chosen_record){
+                            categories.push(chosen_record.get('Name'));
+                        });
+                        Ext.Object.each(chart_data,function(key,value){
+                            var name = Ext.util.Format.ellipsis(key,28,true);
+                            series.push({type:'column',name:name,data:[value], stack: 1});
+                        });
+                        
+                        me.actual_chart = this.down('#actual_chart_box').add({
+                            xtype:'rallychart',
+                            chartData: {
+                                series: series,
+                                categories: categories
+                            },
+                            chartConfig: {
+                                chart: {},
+                                title: {
+                                    text: '',
+                                    align: 'center'
+                                },
+                                xAxis: [{categories:categories}],
+                                plotOptions: {
+                                    column: {
+                                        stacking: 'normal'
+                                    }
+                                },
+                                yAxis: [{title:{text:''}}]
+                            }
+                        });
                     }
+                },
+                _makePieChart: function(){
+                    var me = this;
+                    me.logger.log(this,"_makePieChart");
+                    var total_size = 0;
+                    
+                    var chart_data = me._calculateDataForChart(me._direct_children);
+             
+                    // get total size
+                    Ext.Object.each(chart_data,function(key,value){
+                        total_size += value;
+                    });
+                    
+                    var series = [];
+                    Ext.Object.each(chart_data,function(key,value){
+                        var ratio = parseInt(100*value/total_size);
+                        var name = Ext.util.Format.ellipsis(key,28,true) + "<br/>" + ratio + "%";
+                        series.push({full_name:key,name:name,y:value});
+                    });
                     
                     me.logger.log(this,"Chart Data",chart_data);
                     me.logger.log(this,"Chart Series",series);
