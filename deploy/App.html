@@ -248,37 +248,46 @@
                     if ( this.actual_chart ) { this.actual_chart.destroy(); }
                     
                     this.logger.log(this,"_getData",this.down('#type_selector').getRecord());
-                    var options = {
-                        pi: this._selected_base_records[0],
-                        iteration: this._selected_iteration,
-                        iteration_start: Rally.util.DateTime.format(me.down('#iteration_start_selector').getValue(), 'Y-MM-dd'),
-                        iteration_end: Rally.util.DateTime.format(me.down('#iteration_end_selector').getValue(), 'Y-MM-dd'),
-                        tags: this._selected_tags
-                    };
-            
-                    me.logger.log(this,"options",options);
-                    me._direct_children = {};
                     
-                    if ( options.pi.get('PortfolioItemType').Ordinal === 0 ) {
-                        // we have a feature level item, so do stories instead of children
-                        me.logger.log(this,"Not yet!");
-                    } else {
-                        options.pi.getCollection('Children',{
-                            fetch:['Tags','Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID']
-                        }).load({
-                            callback: function(records,operation,success){
-                                if ( records.length === 0 ) {
-                                    me.actual_chart = me.down('#actual_chart_box').add({xtype:'container',html:'The selected item has no descendants'});
-                                } else {
-                                    Ext.Array.each(records,function(record){
-                                        me._direct_children[record.get('FormattedID')] = record;
-                                        var key = record.get('FormattedID');
-                                        me._findDescendants(key,options,[record]);
-                                    });
+                    // for each selected top record, find all the descendants
+                    Ext.Array.each(me._selected_base_records,function(base_record){
+                        var options = {
+                            pi: base_record,
+                            iteration: me._selected_iteration,
+                            iteration_start: Rally.util.DateTime.format(me.down('#iteration_start_selector').getValue(), 'Y-MM-dd'),
+                            iteration_end: Rally.util.DateTime.format(me.down('#iteration_end_selector').getValue(), 'Y-MM-dd'),
+                            tags: me._selected_tags
+                        };
+                
+                        me.logger.log(me,"options",options);
+                        me._direct_children = {};
+                        
+                        if ( options.pi.get('PortfolioItemType').Ordinal === 0 ) {
+                            // we have a feature level item, so do stories instead of children
+                            me.logger.log(this,"Not yet!");
+                        } else {
+                            options.pi.getCollection('Children',{
+                                fetch:['Tags','Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID']
+                            }).load({
+                                callback: function(records,operation,success){
+                                    if ( records.length === 0 ) {
+                                        me.actual_chart = me.down('#actual_chart_box').add({
+                                            xtype:'container',
+                                            html:'The selected item has no descendants'
+                                        });
+                                    } else {
+                                        Ext.Array.each(records,function(record){
+                                            record.set('_selected_pi',options.pi);
+                                            me._direct_children[record.get('FormattedID')] = record;
+                                            var key = record.get('FormattedID');
+                                            me._findDescendants(key,options,[record]);
+                                        });
+                                    }
                                 }
-                            }
-                        });
-                    }
+                            });
+                        }
+                    });
+                   
                 },
                 _populateConfigurationReporter: function() {
                     var me = this;
@@ -317,10 +326,13 @@
                     }
                     
                     if ( me._selected_base_records.length > 0 ) {
+                        var pi_names = [];
+                        Ext.Array.each(me._selected_base_records,function(record){
+                            pi_names.push(record.get('Name'));
+                        });
                         me.down('#selected_pi_box').update("For " + 
-                            me.down('#type_selector').getRecord().get('ElementName') + " " +
-                            me._selected_base_records[0].get('FormattedID') + " " +
-                            me._selected_base_records[0].get('Name') + ", find:");
+                            me.down('#type_selector').getRecord().get('ElementName') + "(s) " +
+                            pi_names.join(',') + ", find:");
                         me.down('#selected_metric_box').update(metric_message);
                         me.down('#selected_iteration_box').update(iteration_message);
                         me.down('#selected_tag_box').update(tag_message);
@@ -350,7 +362,7 @@
                         autoShow: true,
                         height: 400,
                         title: 'Choose a PI',
-                        multiple: false,
+                        multiple: true,
                         buttons: [{
                             xtype:'rallybutton',
                             text:'Select',
@@ -487,14 +499,17 @@
                         listeners: {
                             load: function(store,records) {
                                 me.logger.log(this,"Stories for " + key,records);
+                                
                                 me._direct_children[key].set("_leaves",records);
+                                me._direct_children[key].set('_selected_pi',options.pi);
+                                
                                 var waiter = null;
                                 for ( var i in me._direct_children ) {
                                     if ( ! me._direct_children[i].get('_leaves') ) {
                                         waiter = i;
                                     }
                                 }
-                                me.logger.log(this,me._direct_children);
+                                me.logger.log(this,"_leaves",me._direct_children);
                                 if ( waiter !== null ) {
                                     me.logger.log(this,"Still waiting for " + waiter);
                                 } else { 
@@ -557,11 +572,21 @@
                     var me = this;
                     me.logger.log(this,"_calculateDataForChart");
                     var chart_data = {};
+                    
                     var metric = this.down('#metric_selector').getValue();
                     Ext.Object.each(direct_children,function(key,child){
+                        var pi = child.get('_selected_pi').get('Name');
+            
+                        if ( !chart_data[pi] ) {
+                            chart_data[pi] = {};
+                        }
+                        
                         var data_key = child.get('Name');
-                        chart_data[data_key] = 0;
+                        if ( ! chart_data[pi][data_key]) {
+                            chart_data[pi][data_key] = 0;
+                        }
                         var leaves = child.get('_leaves');
+            
                         Ext.Array.each(leaves,function(leaf){
                             var size = leaf.get('PlanEstimate')||0;
                             if ( metric === 'count' ) {
@@ -569,10 +594,11 @@
                             } else if ( metric === 'hours' ) {
                                 size = leaf.get('TaskEstimateTotal') || 0;
                             }
-                            chart_data[data_key] += size;
+                            chart_data[pi][data_key] += size;
                             
                         });
                     });
+                    this.logger.log(this,"chart data -- ", chart_data);
                     return chart_data;
                 },
                 _makeBarChart: function() {
@@ -589,21 +615,46 @@
                             html:'No points found'
                         });
                     } else {
+                        
+                        var series_hash = [];
                         var series = [];
-                        var categories = [];
-                        Ext.Array.each(this._selected_base_records, function(chosen_record){
-                            categories.push(chosen_record.get('Name'));
+                        var x_categories = [];
+                        var y_categories = [];
+                        
+                        Ext.Object.each(chart_data,function(top_record_name,value){
+                            x_categories.push(top_record_name);
+                            me.logger.log(me,'value',value);
+                            y_categories = Ext.Array.merge(y_categories,Ext.Object.getKeys(value));
                         });
-                        Ext.Object.each(chart_data,function(key,value){
-                            var name = Ext.util.Format.ellipsis(key,28,true);
-                            series.push({type:'column',name:name,data:[value], stack: 1});
+                        
+                        Ext.Array.each(y_categories,function(category){
+                            series_hash[category] = {type:'column',name:category,data:[], stack: 1};
                         });
+                        
+                        this.logger.log(me,'x categories',x_categories);
+                        this.logger.log(me,'y categories',y_categories);
+                        this.logger.log(me,'series hash', series_hash);
+                        
+                        Ext.Object.each(chart_data, function(top_record,record_chart_data){
+                            Ext.Array.each(y_categories,function(category){
+                                me.logger.log(me,'category',category);
+                                me.logger.log(me,'data',record_chart_data[category]);
+                                var data_point = null;
+                                if ( record_chart_data[category] ) {
+                                    data_point = record_chart_data[category];
+                                }
+                                series_hash[category].data.push(data_point);
+                            });
+                            //var name = Ext.util.Format.ellipsis(key,28,true);
+                        });
+                        
+                        Ext.Object.each(series_hash,function(key,value){ series.push(value);});
                         
                         me.actual_chart = this.down('#actual_chart_box').add({
                             xtype:'rallychart',
                             chartData: {
                                 series: series,
-                                categories: categories
+                                categories: x_categories
                             },
                             chartConfig: {
                                 chart: {},
@@ -611,7 +662,7 @@
                                     text: '',
                                     align: 'center'
                                 },
-                                xAxis: [{categories:categories}],
+                                xAxis: [{categories:x_categories}],
                                 plotOptions: {
                                     column: {
                                         stacking: 'normal'
