@@ -55,15 +55,15 @@ Ext.define('CustomApp', {
             {
                 xtype:'container',
                 itemId:'actual_chart_box',
-                width: 600, 
+                /*width: 600, */
                 height: 500
-            },
+            }/*,
             {
                 xtype:'container',
                 itemId:'target_chart_box',
                 width: 600, 
                 height: 500
-            }
+            }*/
         ]
     }],
     launch: function() {
@@ -201,7 +201,7 @@ Ext.define('CustomApp', {
         var me = this;
         this.down('#pi_selector_box').add({
             xtype:'rallybutton',
-            text:'Choose a Portfolio Item',
+            text:'Choose Portfolio Item(s)',
             handler: me._launchPIPicker,
             scope: me
         });
@@ -305,7 +305,7 @@ Ext.define('CustomApp', {
             });
             me.down('#selected_pi_box').update("For " + 
                 me.down('#type_selector').getRecord().get('ElementName') + "(s) " +
-                pi_names.join(',') + ", find:");
+                pi_names.join(', ') + ", find:");
             me.down('#selected_metric_box').update(metric_message);
             me.down('#selected_iteration_box').update(iteration_message);
             me.down('#selected_tag_box').update(tag_message);
@@ -633,7 +633,9 @@ Ext.define('CustomApp', {
                     categories: x_categories
                 },
                 chartConfig: {
-                    chart: {},
+                    chart: {
+                        width: me.getWidth()
+                    },
                     title: {
                         text: '',
                         align: 'center'
@@ -681,11 +683,13 @@ Ext.define('CustomApp', {
         } else {
             me.actual_chart = this.down('#actual_chart_box').add({
                 xtype:'rallychart',
+                width: me.getWidth(),
                 chartConfig: {
                     chart: {
                         spacingRight: 25,
-                        spacingLeft: 5
-                        /*width: 700*/
+                        spacingLeft: 5,
+                        width: me.getWidth(),
+                        height: me.getHeight()
                     },
                     plotOptions: {
                         
