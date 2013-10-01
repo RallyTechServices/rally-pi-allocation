@@ -6,6 +6,7 @@ Ext.define('CustomApp', {
     _direct_children: [],
     _selected_iteration: null,
     _selected_tags: [],
+    category_field_name: "c_Category",
     items: [
     {
         xtype:'container',
@@ -18,8 +19,7 @@ Ext.define('CustomApp', {
             {xtype:'container',itemId:'chart_selector_box'},
             {xtype:'container',items:[
                 {xtype:'container',itemId:'iteration_selector_box'},
-                {xtype:'container',itemId:'tag_selector_box'},
-                {xtype:'container',itemId:'metric_selector_box'}
+                {xtype:'container',itemId:'tag_selector_box'}
             ]}
         ]
     },
@@ -121,6 +121,15 @@ Ext.define('CustomApp', {
                 {"name":"By Hours", "value":"hours"}
             ]
         });
+        
+        var stacks = Ext.create('Ext.data.Store', {
+            fields: ['name', 'value'],
+            data : [
+                {"name":"By Child", "value":"child"},
+                {"name":"By Category", "value":"category"}
+            ]
+        });
+        
         this.down('#chart_selector_box').add({
             itemId: 'metric_selector',
             xtype: 'combobox',
@@ -135,6 +144,20 @@ Ext.define('CustomApp', {
                 }
             }
         }).setValue('points');
+        this.down('#chart_selector_box').add({
+            itemId: 'stack_selector',
+            xtype: 'combobox',
+            fieldLabel: 'Stack:',
+            store: stacks,
+            displayField: 'name',
+            valueField:'value',
+            labelWidth: 50,
+            listeners: {
+                change: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
+        }).setValue('child');
     },
     _addIterationDatePickers: function() {
         var me = this;
@@ -198,8 +221,6 @@ Ext.define('CustomApp', {
         var me = this;
         if ( this.actual_chart ) { this.actual_chart.destroy(); }
         
-        this.logger.log(this,"_getData",this.down('#type_selector').getRecord());
-        
         // for each selected top record, find all the descendants
         Ext.Array.each(me._selected_base_records,function(base_record){
             var options = {
@@ -207,7 +228,8 @@ Ext.define('CustomApp', {
                 iteration: me._selected_iteration,
                 iteration_start: Rally.util.DateTime.format(me.down('#iteration_start_selector').getValue(), 'Y-MM-dd'),
                 iteration_end: Rally.util.DateTime.format(me.down('#iteration_end_selector').getValue(), 'Y-MM-dd'),
-                tags: me._selected_tags
+                tags: me._selected_tags,
+                stack: me.down('#stack_selector').getValue()
             };
     
             me.logger.log(me,"options",options);
@@ -218,7 +240,7 @@ Ext.define('CustomApp', {
                 me.logger.log(this,"Not yet!");
             } else {
                 options.pi.getCollection('Children',{
-                    fetch:['Tags','Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID']
+                    fetch:['Tags','Children','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID',me.category_field_name]
                 }).load({
                     callback: function(records,operation,success){
                         if ( records.length === 0 ) {
@@ -526,15 +548,18 @@ Ext.define('CustomApp', {
         
         var metric = this.down('#metric_selector').getValue();
         Ext.Object.each(direct_children,function(key,child){
-            var pi = child.get('_selected_pi').get('Name');
+            var pi_key = child.get('_selected_pi').get('Name');
 
-            if ( !chart_data[pi] ) {
-                chart_data[pi] = {};
+            if ( !chart_data[pi_key] ) {
+                chart_data[pi_key] = {};
             }
             
             var data_key = child.get('Name');
-            if ( ! chart_data[pi][data_key]) {
-                chart_data[pi][data_key] = 0;
+            if (  me.down('#stack_selector').getValue() === "category" ) {
+                data_key = child.get(me.category_field_name) || "Other";
+            }
+            if ( ! chart_data[pi_key][data_key]) {
+                chart_data[pi_key][data_key] = 0;
             }
             var leaves = child.get('_leaves');
 
@@ -545,7 +570,7 @@ Ext.define('CustomApp', {
                 } else if ( metric === 'hours' ) {
                     size = leaf.get('TaskEstimateTotal') || 0;
                 }
-                chart_data[pi][data_key] += size;
+                chart_data[pi_key][data_key] += size;
                 
             });
         });
@@ -572,8 +597,8 @@ Ext.define('CustomApp', {
             var x_categories = [];
             var y_categories = [];
             
-            Ext.Object.each(chart_data,function(top_record_name,value){
-                x_categories.push(top_record_name);
+            Ext.Object.each(chart_data,function(pi_key,value){
+                x_categories.push(pi_key);
                 me.logger.log(me,'value',value);
                 y_categories = Ext.Array.merge(y_categories,Ext.Object.getKeys(value));
             });
