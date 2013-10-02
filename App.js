@@ -219,7 +219,9 @@ Ext.define('CustomApp', {
     },
     _getData: function() {
         var me = this;
-        if ( this.actual_chart ) { this.actual_chart.destroy(); }
+        this.down('#actual_chart_box').removeAll();
+        
+        //if ( this.actual_chart ) { this.actual_chart.destroy(); }
         
         // for each selected top record, find all the descendants
         Ext.Array.each(me._selected_base_records,function(base_record){
@@ -244,14 +246,15 @@ Ext.define('CustomApp', {
                 }).load({
                     callback: function(records,operation,success){
                         if ( records.length === 0 ) {
-                            me.actual_chart = me.down('#actual_chart_box').add({
+                            me.down('#actual_chart_box').add({
                                 xtype:'container',
-                                html:'The selected item has no descendants'
+                                html:'No descendants: ' + base_record.get('Name')
                             });
                         } else {
+                            
                             Ext.Array.each(records,function(record){
-                                record.set('_selected_pi',options.pi);
                                 me._direct_children[record.get('FormattedID')] = record;
+                                record.set('_selected_pi',options.pi);
                                 var key = record.get('FormattedID');
                                 me._findDescendants(key,options,[record]);
                             });
@@ -264,7 +267,7 @@ Ext.define('CustomApp', {
     },
     _populateConfigurationReporter: function() {
         var me = this;
-        if ( this.actual_chart ) { this.actual_chart.destroy(); }
+        this.down('#actual_chart_box').removeAll();
         
         var metric_message = "Display by " + me.down('#metric_selector').getValue();
         
@@ -583,7 +586,6 @@ Ext.define('CustomApp', {
         var chart_data = {};
         
         var chart_data = me._calculateDataForChart(me._direct_children);
-        if ( me.actual_chart ) { me.actual_chart.destroy(); }
         
         if ( Ext.Object.getKeys(chart_data).length === 0 ) {
             me.actual_chart = this.down('#actual_chart_box').add({
@@ -672,8 +674,6 @@ Ext.define('CustomApp', {
         
         me.logger.log(this,"Chart Data",chart_data);
         me.logger.log(this,"Chart Series",series);
-
-        if ( me.actual_chart ) { me.actual_chart.destroy(); }
         
         if ( total_size === 0 ) {
             me.actual_chart = this.down('#actual_chart_box').add({
