@@ -84,15 +84,15 @@
                         },
                         {
                             xtype:'container',
-                            itemId:'selected_metric_box'
-                        },
-                        {
-                            xtype:'container',
                             itemId:'selected_iteration_box'
                         },
                         {
                             xtype:'container',
                             itemId:'selected_tag_box'
+                        },
+                        {
+                            xtype:'container',
+                            itemId:'selected_metric_box'
                         }
                     ]
                 },
@@ -318,24 +318,23 @@
                     var me = this;
                     this.down('#actual_chart_box').removeAll();
                     
-                    var metric_message = "Display by " + me.down('#metric_selector').getValue();
                     
                     //me._selected_iteration = me.down('#iteration_selector').getRecord();
                     
-                    var iteration_message = "&nbsp;&nbsp;&nbsp;Items regardless of iteration";
+                    var iteration_message = "In progress items regardless of iteration";
                     if ( me._selected_iteration && me._selected_iteration.get('Name') !== "" ) {
-                        iteration_message = "&nbsp;&nbsp;&nbsp;Items associated with iterations named " + me._selected_iteration.get('Name');
+                        iteration_message = "In progress items associated with iterations named " + me._selected_iteration.get('Name');
                     }
-                    
+            
                     var iteration_start_date = Rally.util.DateTime.format(me.down('#iteration_start_selector').getValue(), 'D, M d, Y');
                     var iteration_end_date = Rally.util.DateTime.format(me.down('#iteration_end_selector').getValue(), 'D, M d, Y');
                     if ( iteration_start_date  && iteration_end_date ) {
-                        iteration_message =  "&nbsp;&nbsp;&nbsp;Items associated with iterations starting after " +
+                        iteration_message =  "In progress items associated with iterations starting after " +
                                 iteration_start_date + " and ending before " + iteration_end_date;
                     } else if ( iteration_start_date ) {
-                        iteration_message =  "&nbsp;&nbsp;&nbsp;Items associated with iterations starting after " + iteration_start_date;
+                        iteration_message =  "In progress items associated with iterations starting after " + iteration_start_date;
                     } else if ( iteration_end_date ) {
-                        iteration_message =  "&nbsp;&nbsp;&nbsp;Items associated with iterations ending before " + iteration_end_date;
+                        iteration_message =  "In progress items associated with iterations ending before " + iteration_end_date;
                     }
                     
                     
@@ -343,13 +342,16 @@
                     Ext.Array.each(this.down('#tag_selector').getValue(),function(tag){
                         me._selected_tags.push(tag.get('Name'));
                     });
-                    var tag_message = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and regardless of tag";
+                    var tag_message = "&nbsp;&nbsp;and regardless of tag";
                     if ( me._selected_tags.length === 1 ) {
-                        tag_message = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and with tag named " + me._selected_tags[0];
+                        tag_message = "&nbsp;&nbsp;and with tag named " + me._selected_tags[0];
                     } else if ( me._selected_tags.length > 1 ) {
-                        tag_message = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and with one of these tags: " + me._selected_tags.join(',');
+                        tag_message = "&nbsp;&nbsp;and with one of these tags: " + me._selected_tags.join(',');
                     }
                     
+                    var metric_message = "&nbsp;&nbsp;&nbsp;&nbsp;Display by " + me.down('#metric_selector').getValue();
+            
+                            
                     if ( me._selected_base_records.length > 0 ) {
                         var pi_names = [];
                         Ext.Array.each(me._selected_base_records,function(record){
@@ -378,21 +380,17 @@
                         ],
                         columns: [
                             {text:'id',dataIndex:'FormattedID'},
-                            {text:'Name',dataIndex:'Name',flex: 1},
-                            {text:'State',dataIndex:'State'}
+                            {text:'Name',dataIndex:'Name',flex: 1}
                         ],
                         storeConfig: {
                             fetch:['Children','UserStories','Name','FormattedID','TypePath','PortfolioItemType','Ordinal','ObjectID','Tags']
                         },
                         autoShow: true,
-                        height: 400,
+                        height: 500,
                         title: 'Choose a PI',
                         multiple: true,
-                        buttons: [{
-                            xtype:'rallybutton',
-                            text:'Select',
-                            userAction:'clicked done in dialog',
-                            handler:function(){
+                        listeners: {
+                            artifactChosen: function(selectedRecord){
                                 var records = me.dialog._getSelectedRecords();
                                 me._selected_base_records = records;
                                 if ( me._selected_base_records.length > 0 ) {
@@ -401,6 +399,15 @@
                                     me.down('#draw_chart_button').setDisabled(true);
                                 }
                                 me._populateConfigurationReporter();
+                            },
+                            scope: this
+                        }/*,
+                        buttons: [{
+                            xtype:'rallybutton',
+                            text:'Select',
+                            userAction:'clicked done in dialog',
+                            handler:function(){
+                                
                                 me.dialog.close();
                             },
                             scope: me
@@ -419,7 +426,7 @@
                                 me.dialog.close();
                             },
                             scope: me
-                        }]
+                        }]*/
                      });
                 },
                 _findDescendants: function(key,options,records){
@@ -695,6 +702,9 @@
                                 plotOptions: {
                                     column: {
                                         stacking: 'normal'
+                                    },
+                                    series: {
+                                        groupPadding: 0
                                     }
                                 },
                                 yAxis: [{title:{text:''}}]
