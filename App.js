@@ -655,7 +655,8 @@ Ext.define('CustomApp', {
                             stacking: 'normal'
                         },
                         series: {
-                            groupPadding: 0
+                            groupPadding: 0,
+                            pointWidth: 60
                         }
                     },
                     yAxis: [{title:{text:''}}]
