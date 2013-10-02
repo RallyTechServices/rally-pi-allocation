@@ -635,6 +635,11 @@ Ext.define('CustomApp', {
             
             Ext.Object.each(series_hash,function(key,value){ series.push(value);});
             
+            var column_width = null; // let page define
+            if (x_categories.length < 10) {
+                column_width = 60;
+            }
+            
             me.actual_chart = this.down('#actual_chart_box').add({
                 xtype:'rallychart',
                 chartData: {
@@ -656,7 +661,7 @@ Ext.define('CustomApp', {
                         },
                         series: {
                             groupPadding: 0,
-                            pointWidth: 60
+                            pointWidth: column_width
                         }
                     },
                     yAxis: [{title:{text:''}}]
