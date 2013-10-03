@@ -118,7 +118,8 @@ Ext.define('CustomApp', {
             data : [
                 {"name":"By Points", "value":"points"},
                 {"name":"By Count", "value":"count"},
-                {"name":"By Hours", "value":"hours"}
+                {"name":"By Hours", "value":"hours"},
+                {"name":"By Cost","value":"cost"}
             ]
         });
         
@@ -158,6 +159,17 @@ Ext.define('CustomApp', {
                 }
             }
         }).setValue('child');
+        this.down('#chart_selector_box').add({
+            itemId: 'cost_selector',
+            xtype: 'rallynumberfield',
+            fieldLabel: 'Cost Multiplier ($):',
+            labelWidth: 50,
+            listeners: {
+                change: function() {
+                    me._populateConfigurationReporter();
+                }
+            }
+        }).setValue(125);
     },
     _addIterationDatePickers: function() {
         var me = this;
@@ -579,12 +591,14 @@ Ext.define('CustomApp', {
                     size = 1;
                 } else if ( metric === 'hours' ) {
                     size = leaf.get('TaskEstimateTotal') || 0;
+                } else if ( metric === 'cost' ) {
+                    var hours = leaf.get('TaskEstimateTotal') || 0;
+                    size = hours * me.down('#cost_selector').getValue();
                 }
                 chart_data[pi_key][data_key] += size;
                 
             });
         });
-        this.logger.log(this,"chart data -- ", chart_data);
         return chart_data;
     },
     _makeBarChart: function() {
@@ -608,7 +622,6 @@ Ext.define('CustomApp', {
             
             Ext.Object.each(chart_data,function(pi_key,value){
                 x_categories.push(pi_key);
-                me.logger.log(me,'value',value);
                 y_categories = Ext.Array.merge(y_categories,Ext.Object.getKeys(value));
             });
             
@@ -637,6 +650,22 @@ Ext.define('CustomApp', {
                     if ( record_chart_data[category] ) {
                         data_point = record_chart_data[category];
                     }
+                    if (me.down('#metric_selector').getValue() === "cost" ) { 
+                        data_point = {
+                            dataLabels: {
+                                formatter: function() {
+                                    return '$'+this.y;
+                                },
+                                enabled: true,
+                                align: 'left',
+                                style: {
+                                    fontWeight: 'bold'
+                                }
+                            },
+                            y: record_chart_data[category]
+                                
+                        }
+                    }
                     series_hash[category].data.push(data_point);
                 });
                 //var name = Ext.util.Format.ellipsis(key,28,true);
@@ -663,7 +692,17 @@ Ext.define('CustomApp', {
                         text: '',
                         align: 'center'
                     },
-                    xAxis: [{categories:x_categories}],
+                    xAxis: [{
+                        categories:x_categories,
+                        labels: {
+                            align: 'right',
+                            rotation: -90,
+                            
+                            formatter: function() {
+                                return me._splitString(this.value,25);
+                            }
+                        }
+                    }],
                     plotOptions: {
                         column: {
                             stacking: 'normal'
@@ -677,6 +716,21 @@ Ext.define('CustomApp', {
                 }
             });
         }
+    },
+    _splitString: function(value,len){
+        var me = this;
+        if (value && value.length > len) {
+            var vs = value.substr(0, len - 2),
+            index = Math.max(vs.lastIndexOf('/'), vs.lastIndexOf(' '), vs.lastIndexOf('.'), vs.lastIndexOf('!'), vs.lastIndexOf('?'));
+            if (index !== -1 && index >= (len - 15)) {
+                var first_part = vs.substr(0, index) + "<br/>";
+                var second_part = me._splitString(value.substr(index,len));
+                // return   vs.substr(0, index) + "<br/>" + value.substr(index,len);
+                return first_part + second_part;
+            }
+            return value.substr(0, len - 3) + "<br/>" + value.substr(len-3,len);
+        }
+        return value;
     },
     _makePieChart: function(){
         var me = this;
