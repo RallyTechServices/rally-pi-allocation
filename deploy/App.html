@@ -661,6 +661,9 @@
                             y_categories = Ext.Array.merge(y_categories,Ext.Object.getKeys(value));
                         });
                         
+                        y_categories = y_categories.sort();
+                        x_categories = x_categories.sort();
+                        
                         Ext.Array.each(y_categories,function(category){
                             series_hash[category] = {type:'column',name:category,data:[], stack: 1};
                         });
@@ -669,10 +672,16 @@
                         this.logger.log(me,'y categories',y_categories);
                         this.logger.log(me,'series hash', series_hash);
                         
-                        Ext.Object.each(chart_data, function(top_record,record_chart_data){
+                        // want to put the x items in alpha order
+                        var x_keys = [];
+                        x_keys = Ext.Object.getKeys(chart_data).sort();
+                        
+                        this.logger.log(me,'keys',x_keys);
+                        
+                        Ext.Array.each(x_keys, function(x_key) {
+                            var record_chart_data = chart_data[x_key];
+            //            Ext.Object.each(chart_data, function(top_record,record_chart_data){
                             Ext.Array.each(y_categories,function(category){
-                                me.logger.log(me,'category',category);
-                                me.logger.log(me,'data',record_chart_data[category]);
                                 var data_point = null;
                                 if ( record_chart_data[category] ) {
                                     data_point = record_chart_data[category];
