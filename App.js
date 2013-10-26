@@ -644,7 +644,6 @@ Ext.define('CustomApp', {
             
             Ext.Array.each(x_keys, function(x_key) {
                 var record_chart_data = chart_data[x_key];
-//            Ext.Object.each(chart_data, function(top_record,record_chart_data){
                 Ext.Array.each(y_categories,function(category){
                     var data_point = null;
                     if ( record_chart_data[category] ) {
@@ -674,8 +673,23 @@ Ext.define('CustomApp', {
             Ext.Object.each(series_hash,function(key,value){ series.push(value);});
             
             var column_width = null; // let page define
-            if (x_categories.length < 10) {
+            if (x_categories.length < 20) {
                 column_width = 60;
+            }
+            
+            me.logger.log(this,"length:",x_categories.length);
+            
+            // pad out when not so many items so the bars are not spread out so much
+            if ( x_categories.length < 15 ) {
+                var pad_with = ( 15 - x_categories.length ) / 2;
+                for ( var i=0; i < pad_with; i++ ) {
+                    Ext.Array.each(series,function(points){
+                        points.data.push(null);
+                        points.data.unshift(null);
+                    });
+                    x_categories.push("");
+                    x_categories.unshift("");
+                }
             }
             
             me.actual_chart = this.down('#actual_chart_box').add({
