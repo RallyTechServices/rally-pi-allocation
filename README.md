@@ -7,6 +7,8 @@ calculated by the metric you choose: points, count, hours or cost.  The stacks a
 of the metric by child (count/add up the leaf node children associated with each next level down
 PI) or by category (count/add up the values associated with each value in the category field).  
 
+Only stories that are in a state greater than "Defined" are counted.
+
 When cost is used as the metric, the found task hours (by estimate) are multiplied by the entered
 cost multiplier and shown with a dollar sign.
 

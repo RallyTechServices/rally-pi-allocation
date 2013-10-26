@@ -649,22 +649,26 @@ Ext.define('CustomApp', {
                     if ( record_chart_data[category] ) {
                         data_point = record_chart_data[category];
                     }
-                    if (me.down('#metric_selector').getValue() === "cost" ) { 
-                        data_point = {
-                            dataLabels: {
-                                formatter: function() {
-                                    return '$'+this.y;
-                                },
-                                enabled: true,
-                                align: 'left',
-                                style: {
-                                    fontWeight: 'bold'
-                                }
-                            },
-                            y: record_chart_data[category]
-                                
-                        }
-                    }
+//                    if (me.down('#metric_selector').getValue() === "cost" && record_chart_data[category]) { 
+//                        data_point = {
+//                            dataLabels: {
+//                                formatter: function() {
+//                                    if ( this.y ) {
+//                                        return '$'+this.y;
+//                                    } else {
+//                                        return '$0';
+//                                    }
+//                                },
+//                                enabled: true,
+//                                align: 'left',
+//                                style: {
+//                                    fontWeight: 'bold'
+//                                }
+//                            },
+//                            y: record_chart_data[category]
+//                                
+//                        }
+//                    }
                     series_hash[category].data.push(data_point);
                 });
                 //var name = Ext.util.Format.ellipsis(key,28,true);
@@ -717,6 +721,23 @@ Ext.define('CustomApp', {
                             }
                         }
                     }],
+                    tooltip: { 
+                        formatter: function() {
+                            var metric = me.down('#metric_selector').getValue();
+                            if ( metric === "cost" ) {
+                                return this.x + '<br/><b>' + this.series.name + '</b>: $' + this.y;
+                            } else {
+                                var unit = "";
+                                if ( metric === "hours" ) {
+                                    unit = "hours";
+                                } else if ( metric === "points" ) {
+                                    unit = "points";
+                                }
+                                return this.x + '<br/><b>' + this.series.name + '</b>: ' + this.y + " " + unit;
+                            }
+                        },
+                        enabled: true
+                    },
                     plotOptions: {
                         column: {
                             stacking: 'normal'
